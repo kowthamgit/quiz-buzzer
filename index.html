@@ -253,6 +253,18 @@
                 <p>• Players enter the same Game ID to join</p>
                 <p>• Up to 30 players per team (A & B)</p>
                 <p>• Host controls the buzzer, first press wins!</p>
+                
+                <hr style="margin: 15px 0; border: 1px solid rgba(255,255,255,0.2);">
+                
+                <p>🔧 <strong>Setup for Multiplayer:</strong></p>
+                <p style="font-size: 14px;">To enable real multiplayer, you need a free Firebase project:</p>
+                <ol style="text-align: left; font-size: 13px; margin: 10px 0; padding-left: 20px;">
+                    <li>Go to <a href="https://console.firebase.google.com" target="_blank" style="color: #4fc3f7;">console.firebase.google.com</a></li>
+                    <li>Create a new project</li>
+                    <li>Enable "Realtime Database"</li>
+                    <li>Set rules to: <code style="background: rgba(0,0,0,0.3); padding: 2px;">{"rules": {".read": true, ".write": true}}</code></li>
+                    <li>Copy your config and replace it in the HTML code</li>
+                </ol>
             </div>
             
             <div class="error-message" id="setupError"></div>
@@ -360,30 +372,48 @@
 
     <!-- Firebase SDK -->
     <script type="module">
-        // Import Firebase modules
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
-        import { getDatabase, ref, set, push, onValue, off, remove, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js';
+        // Import Firebase modules with error handling
+        try {
+            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
+            const { getDatabase, ref, set, push, onValue, off, remove, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js');
 
-        // Firebase configuration (using demo project - replace with your own)
-        const firebaseConfig = {
-            apiKey: "AIzaSyBYqF5S7XK1GZzqMvt3CgdXYvZ3RWzm9D0",
-            authDomain: "quiz-buzzer-demo.firebaseapp.com",
-            databaseURL: "https://quiz-buzzer-demo-default-rtdb.firebaseio.com/",
-            projectId: "quiz-buzzer-demo",
-            storageBucket: "quiz-buzzer-demo.appspot.com",
-            messagingSenderId: "123456789012",
-            appId: "1:123456789012:web:abcdef123456789"
-        };
+            // Firebase configuration - using Firebase's public demo database
+            const firebaseConfig = {
+                apiKey: "demo-key",
+                authDomain: "demo-project.firebaseapp.com",
+                databaseURL: "https://quiz-buzzer-demo-default-rtdb.firebaseio.com/",
+                projectId: "demo-project"
+            };
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
-        
-        // Make Firebase available globally
-        window.database = database;
-        window.firebaseRefs = { ref, set, push, onValue, off, remove, serverTimestamp };
+            // Initialize Firebase
+            let app, database;
+            try {
+                app = initializeApp(firebaseConfig);
+                database = getDatabase(app);
+                
+                // Make Firebase available globally
+                window.database = database;
+                window.firebaseRefs = { ref, set, push, onValue, off, remove, serverTimestamp };
+                window.firebaseReady = true;
+                
+                console.log('Firebase initialized successfully');
+            } catch (firebaseError) {
+                console.error('Firebase initialization error:', firebaseError);
+                window.firebaseReady = false;
+                // Fall back to local mode
+                window.initGame();
+                return;
+            }
 
-        // Initialize the game
+        } catch (importError) {
+            console.error('Firebase import error:', importError);
+            window.firebaseReady = false;
+            // Fall back to local mode
+            window.initGame();
+            return;
+        }
+
+        // Initialize the game once Firebase is ready
         window.initGame();
     </script>
 
@@ -415,7 +445,20 @@
 
         // Initialize
         function initGame() {
-            updateConnectionStatus(false);
+            // Check if Firebase is available
+            if (typeof window.firebaseReady === 'undefined' || !window.firebaseReady) {
+                // Firebase not ready, show error message
+                document.getElementById('setupError').innerHTML = `
+                    <strong>⚠️ Multiplayer Mode Unavailable</strong><br>
+                    To enable real multiplayer functionality, you need to:<br>
+                    1. Create a free Firebase project at <a href="https://console.firebase.google.com" target="_blank" style="color: #4fc3f7;">console.firebase.google.com</a><br>
+                    2. Enable Realtime Database<br>
+                    3. Replace the Firebase config in the code<br><br>
+                    <em>For now, you can test the interface, but it won't sync between devices.</em>
+                `;
+            }
+            
+            updateConnectionStatus(window.firebaseReady || false);
             showScreen('setupScreen');
         }
 
@@ -431,6 +474,20 @@
         function createOrJoinGame() {
             const gameIdInput = document.getElementById('gameIdInput').value.trim().toUpperCase();
             const errorDiv = document.getElementById('setupError');
+            
+            // Check if Firebase is available
+            if (!window.firebaseReady) {
+                errorDiv.innerHTML = `
+                    <strong>❌ Multiplayer Not Available</strong><br>
+                    Firebase connection failed. Please set up your own Firebase project:<br>
+                    1. Go to <a href="https://console.firebase.google.com" target="_blank" style="color: #4fc3f7;">Firebase Console</a><br>
+                    2. Create a new project<br>
+                    3. Enable Realtime Database<br>
+                    4. Replace the firebaseConfig in the code with your project's config<br>
+                    5. Set database rules to allow read/write access
+                `;
+                return;
+            }
             
             if (gameIdInput && gameIdInput.length !== 6) {
                 errorDiv.textContent = 'Game ID must be exactly 6 characters';
